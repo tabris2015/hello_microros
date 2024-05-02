@@ -19,6 +19,7 @@ extern "C" {
 #include "pid.hpp"
 #include "motor.hpp"
 #include "ws2812.hpp"
+#include "robot.h"
 
 
 using namespace pimoroni;
@@ -28,7 +29,7 @@ using namespace plasma;
 
 const uint LED_PIN = 25;
 const uint A_PIN = 12;
-const int COUNTS_PER_REV = 1428;
+//const int COUNTS_PER_REV = 1428;
 const uint UPDATES = 100;
 constexpr float UPDATE_RATE = 1.0f / (float)UPDATES;
 
@@ -36,35 +37,23 @@ const uint SAMPLE_RATE_MS = 1000 / UPDATES;
 const uint PUB_INTERVAL_MS = 100;
 
 
-static constexpr pin_pair MOTOR_A_PINS{10, 11};
-constexpr uint LED_DATA_PIN = 23;
+Robot robot(
+        25,
+        23,
+        12,
+        {10, 11},
+        {9,8},
+        {4, 5},
+        {2, 3},
+        {0.2, 0.3, 0, UPDATE_RATE},
+        {0.2, 0.3, 0, UPDATE_RATE}
+        );
 
 Button button_a(12);
 Button button_b(13);
 
-Motor motor_a(MOTOR_A_PINS);
-
-
-Encoder encoder_a(
-        pio0,
-        0,
-        {4, 5},
-        PIN_UNUSED,
-        REVERSED_DIR,
-        COUNTS_PER_REV,
-        true);
-
-
 
 float setpoint = 0.0f;
-
-constexpr float KP = 0.2f;
-constexpr float KI = 0.3f;
-constexpr float KD = 0.0f;
-
-PID pid_a = PID(KP, KI, KD, UPDATE_RATE);
-
-WS2812 rgb_led(1, pio1, 0, LED_DATA_PIN);
 
 rcl_publisher_t publisher;
 rcl_subscription_t twist_subscriber;
@@ -75,26 +64,21 @@ geometry_msgs__msg__Twist * twist_msg;
 int led_state = 0;
 float linear_x = 0;
 
-float state_array[5] = {};
+float state_array[6] = {};
 
 void pid_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 {
-    Encoder::Capture capture = encoder_a.capture();
-    pid_a.setpoint = setpoint;
+    robot_state state = robot.pid_step();
 
-    float output = pid_a.calculate(capture.radians_per_second());
-    motor_a.speed(output);
-
-    static float data[5] = {setpoint, capture.radians_per_second(), output, 0, 0};
-
-    msg.data.capacity = 5;
-    msg.data.size = 5;
+    msg.data.capacity = 6;
+    msg.data.size = 6;
     msg.data.data = state_array;
-    msg.data.data[0] = setpoint;
-    msg.data.data[1] = capture.radians_per_second();
-    msg.data.data[2] = output;
-    msg.data.data[3] = linear_x;
-    msg.data.data[4] = 0;
+    msg.data.data[0] = state.l_wheel_state.setpoint;
+    msg.data.data[1] = state.l_wheel_state.reading;
+    msg.data.data[2] = state.l_wheel_state.output;
+    msg.data.data[3] = state.r_wheel_state.setpoint;
+    msg.data.data[4] = state.r_wheel_state.reading;
+    msg.data.data[5] = state.r_wheel_state.output;
 
     rcl_ret_t ret = rcl_publish(&publisher, &msg, NULL);
     // gpio_put(LED_PIN, capture.count() % 4);
@@ -105,11 +89,16 @@ void pid_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 void twist_callback(const void * msgin)
 {
     led_state = !led_state;
-    gpio_put(LED_PIN, led_state);
+    led_state ? robot.on(): robot.off();
     const geometry_msgs__msg__Twist * twist_msg = (const geometry_msgs__msg__Twist *)msgin;
 
     linear_x = twist_msg->linear.x;
-    rgb_led.set_rgb(0, (uint8_t)twist_msg->linear.x * 10, 0, 0);
+    robot.set_unicycle(twist_msg->linear.x, twist_msg->angular.z);
+    robot.set_rgb(
+            (uint8_t)twist_msg->linear.x * 10,
+            (uint8_t)twist_msg->linear.y * 10,
+            (uint8_t)twist_msg->linear.z * 10
+            );
 }
 
 
@@ -123,13 +112,6 @@ int main()
 		pico_serial_transport_write,
 		pico_serial_transport_read
 	);
-
-    gpio_init(LED_PIN);
-    gpio_set_dir(LED_PIN, GPIO_OUT);
-
-    rgb_led.start(UPDATES);
-    motor_a.init();
-    encoder_a.init();
 
     rcl_timer_t pid_timer;
     rcl_timer_t publisher_timer;
@@ -187,17 +169,17 @@ int main()
         &twist_callback, 
         ON_NEW_DATA);
     if (RCL_RET_OK != rc) {
-    gpio_put(LED_PIN, 1);
+    robot.on();
     // return -1;
     }
     // gpio_put(LED_PIN, 1);
     while (true)
     {
         if(button_a.read()) {
-            setpoint += 1;
+            robot.l_setpoint_rad_s += 1;
         }
         if(button_b.read()) {
-            setpoint -= 1;
+            robot.l_setpoint_rad_s -= 1;
         }
         
         rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10));

@@ -18,6 +18,7 @@ add_executable(${NAME}
 )
 
 target_include_directories(${NAME} PRIVATE include)
+#target_include_directories(${NAME} PRIVATE robot)
 
 target_include_directories(${NAME} PUBLIC
 libmicroros/include
@@ -29,6 +30,7 @@ include(drivers/motor/motor)
 include(drivers/encoder/encoder)
 include(drivers/pid/pid)
 include(drivers/plasma/plasma)
+include(robot/robot.cmake)
 
 target_link_libraries(${NAME}
     pico_stdlib
@@ -38,6 +40,7 @@ target_link_libraries(${NAME}
     encoder
     pid
     plasma
+    robot
 )
 SET(CMAKE_C_FLAGS  "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections")
 SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections")
