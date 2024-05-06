@@ -26,9 +26,18 @@ struct wheel_state {
     float output;
 };
 
+struct robot_odometry {
+    float x_pos;
+    float y_pos;
+    float theta;
+    float v;
+    float w;
+};
+
 struct robot_state {
     wheel_state l_wheel_state;
     wheel_state r_wheel_state;
+    robot_odometry odometry;
 };
 
 class Robot {
@@ -53,7 +62,8 @@ public:
     l_pid(l_pid_params.kp, l_pid_params.ki, l_pid_params.kd, l_pid_params.rate),
     r_pid(r_pid_params.kp, r_pid_params.ki, r_pid_params.kd, r_pid_params.rate),
     l_setpoint_rad_s(0), r_setpoint_rad_s(0),
-    wheel_distance(WHEEL_DISTANCE), wheel_radius(WHEEL_RADIUS)
+    wheel_distance(WHEEL_DISTANCE), wheel_radius(WHEEL_RADIUS),
+    odometry({0, 0, 0, 0, 0})
     {
         gpio_init(led_pin);
         gpio_set_dir(led_pin, GPIO_OUT);
@@ -71,6 +81,8 @@ public:
     void set_wheel_speeds(float l_rad_s, float r_rad_s);
     void set_unicycle(float linear, float angular);
 
+    void update_odometry(int32_t dl_ticks, int32_t dr_ticks);
+
     float l_setpoint_rad_s;
     float r_setpoint_rad_s;
 
@@ -87,4 +99,5 @@ private:
     PID r_pid;
     float wheel_distance;
     float wheel_radius;
+    robot_odometry odometry;
 };

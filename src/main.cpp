@@ -9,16 +9,13 @@ extern "C" {
 #include <std_msgs/msg/float32.h>
 #include <std_msgs/msg/float32_multi_array.h>
 #include <geometry_msgs/msg/twist.h>
+#include <nav_msgs/msg/odometry.h>
 #include <rmw_microros/rmw_microros.h>
 
 #include "pico/stdlib.h"
 #include "pico_uart_transports.h"
 }
 #include "button.hpp"
-#include "encoder.hpp"
-#include "pid.hpp"
-#include "motor.hpp"
-#include "ws2812.hpp"
 #include "robot.h"
 
 
@@ -64,7 +61,7 @@ geometry_msgs__msg__Twist * twist_msg;
 int led_state = 0;
 float linear_x = 0;
 
-float state_array[6] = {};
+float state_array[11] = {};
 
 void pid_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 {
@@ -79,6 +76,12 @@ void pid_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
     msg.data.data[3] = state.r_wheel_state.setpoint;
     msg.data.data[4] = state.r_wheel_state.reading;
     msg.data.data[5] = state.r_wheel_state.output;
+    msg.data.data[6] = state.odometry.x_pos;
+    msg.data.data[7] = state.odometry.y_pos;
+    msg.data.data[8] = state.odometry.theta;
+    msg.data.data[9] = state.odometry.v;
+    msg.data.data[11] = state.odometry.w;
+
 
     rcl_ret_t ret = rcl_publish(&publisher, &msg, NULL);
     // gpio_put(LED_PIN, capture.count() % 4);
